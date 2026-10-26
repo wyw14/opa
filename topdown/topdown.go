@@ -47,6 +47,12 @@ type (
 	BuiltinFunc = v1.BuiltinFunc
 )
 
+// MaskingHash returns the hex-encoded digest decision log masking uses for
+// "hash" mask rules (SHA-256, or HMAC-SHA256 when key is non-empty).
+func MaskingHash(v any, key string) (string, error) {
+	return v1.MaskingHash(v, key)
+}
+
 // RegisterBuiltinFunc adds a new built-in function to the evaluation engine.
 func RegisterBuiltinFunc(name string, f BuiltinFunc) {
 	v1.RegisterBuiltinFunc(name, f)

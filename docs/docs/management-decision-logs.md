@@ -206,12 +206,28 @@ In order to **modify** the contents of an input field, the **mask** rule may uti
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `"remove"` | The `"path"` specified will be removed from the resulting log message. The `"value"` mask field is ignored for `"remove"` operations.                           |
 | `"upsert"` | The `"value"` will be set at the specified `"path"`. If the field exists it is overwritten, if it does not exist it will be added to the resulting log message. |
+| `"hash"`   | The value at the specified `"path"` is replaced with a hex-encoded digest. Without a `"key"` this is SHA-256 over the JSON encoding of the value; with a `"key"` it is HMAC-SHA256 keyed with it. Paths pointing at undefined data are ignored. |
+| `"retain"` | The value at the specified `"path"` is logged unchanged. This is an explicit no-op used to allow-list a field, e.g. together with the secure-by-default classification of the [masking policy preview](#masking-policy-preview). |
 
 - `"path"` -- A JSON pointer path to the field to perform the operation on.
 
 Optional Fields:
 
 - `"value"` -- Only required for `"upsert"` operations.
+- `"key"` -- Optional key for `"hash"` operations, switching the digest from SHA-256 to HMAC-SHA256.
+
+For example, pseudonymize an email address instead of removing it:
+
+```ruby
+package system.log
+
+mask contains {"op": "hash", "path": "/input/email", "key": "tenant-key"} if {
+    input.input.email
+}
+```
+
+The digested path is recorded in the event's `masked` field, just like an
+`"upsert"` rule.
 
 > This is processed for every decision being logged, so be mindful of
 > performance when performing complex operations in the mask body, e.g. crypto
@@ -261,6 +277,68 @@ to track **remove** vs **upsert** mask operations.
   "timestamp": "2019-06-03T20:07:16.939402185Z"
 }
 ```
+
+## Masking Policy Preview
+
+Before rolling a masking policy out, it can be evaluated against a sample
+decision log event without evaluating the decision itself and without writing
+anything to a decision log sink. The preview reports, for every field of the
+event's `input`, `result`, and `nd_builtin_cache` sections, whether the policy
+would **retain**, **hash**, or **remove** it, together with the reason the
+matching rule applied.
+
+The preview is available through the Go SDK:
+
+- `(*logs.Plugin).PreviewMask(ctx, logs.PreviewMaskOptions{Event: sample})`
+- `(*runtime.Runtime).PreviewDecisionLogMask(ctx, opts)`, which looks up the
+  decision logs plugin registered with the runtime.
+
+A sample event is passed in the same `logs.EventV1` shape a logged decision
+would have:
+
+```go
+var sample any = map[string]any{"name": "bob", "email": "bob@example.com"}
+
+preview, err := rt.PreviewDecisionLogMask(ctx, logs.PreviewMaskOptions{
+    Event: &logs.EventV1{Input: &sample},
+})
+```
+
+`preview.Rules` lists every rule the policy returned for the sample, including
+whether the targeted path is present in the event. `preview.Paths` classifies
+each event field, for example:
+
+```json
+{
+  "decision": "/system/log/mask",
+  "default_action": "remove",
+  "rules": [
+    {"index": 0, "op": "hash", "path": "/input/email", "present": true}
+  ],
+  "paths": [
+    {"path": "/input/email", "action": "hash", "matched": true,
+     "rule_index": 0, "reason": "matched rule 0 (op \"hash\") exactly"},
+    {"path": "/input/name", "action": "remove", "matched": false,
+     "reason": "no masking rule matched; applying secure-by-default action \"remove\""}
+  ]
+}
+```
+
+Fields that no rule matches are classified with a secure-by-default action of
+`remove`, so an unclassified sensitive field is never silently reported as
+safe. The default can be relaxed (or tightened to `hash`) with
+`PreviewMaskOptions.DefaultAction`. Rules targeting a container (e.g.
+`/input/items`) cover all of its descendants; the verdict reason records when
+an action is inherited from such a rule.
+
+Preview guarantees:
+
+- No event is buffered, uploaded, printed to the console, or forwarded to a
+  custom logger plugin; the sample event is not modified.
+- The masking policy is evaluated once on a single read-only store snapshot
+  with a pinned compiler, so a bundle activating while the preview runs cannot
+  mix rule versions. Revisions of the bundles associated with the sample event
+  are reported in `preview.Bundles`.
 
 ## Drop Decision Logs
 

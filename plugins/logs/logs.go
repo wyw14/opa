@@ -67,3 +67,32 @@ const Name = v1.Name
 func Lookup(manager *plugins.Manager) *Plugin {
 	return v1.Lookup(manager)
 }
+
+// MaskAction is the effective action the masking policy takes on an event
+// field.
+type MaskAction = v1.MaskAction
+
+// Mask actions reported by a masking policy preview.
+const (
+	MaskActionRetain = v1.MaskActionRetain
+	MaskActionHash   = v1.MaskActionHash
+	MaskActionRemove = v1.MaskActionRemove
+	MaskActionUpsert = v1.MaskActionUpsert
+
+	// DefaultMaskAction is the secure-by-default action for fields that no
+	// masking rule covers.
+	DefaultMaskAction = v1.DefaultMaskAction
+)
+
+// PreviewMaskOptions parameterizes a masking policy preview.
+type PreviewMaskOptions = v1.PreviewMaskOptions
+
+// MaskPathVerdict describes what happens to a single field when logged.
+type MaskPathVerdict = v1.MaskPathVerdict
+
+// MaskRulePreview describes one rule returned by the masking policy.
+type MaskRulePreview = v1.MaskRulePreview
+
+// MaskPreview is the result of previewing the masking policy on a sample
+// event without logging it.
+type MaskPreview = v1.MaskPreview

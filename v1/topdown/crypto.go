@@ -455,6 +455,35 @@ func builtinCryptoSha256(_ BuiltinContext, operands []*ast.Term, iter func(*ast.
 	return iter(ast.StringTerm(toHexEncodedString(sha256sum[:])))
 }
 
+// MaskingHash returns the hex-encoded digest decision log masking uses for
+// "hash" mask rules. The message is the JSON encoding of v, which is
+// deterministic for the map and slice types produced by Rego evaluation
+// (encoding/json marshals map keys in sorted order). When key is empty the
+// digest is SHA-256; otherwise it is HMAC-SHA256 keyed with key.
+//
+// Hashing the JSON encoding rather than the raw string representation means
+// the digest of a structured value is stable regardless of how the policy
+// obtained it, matching the behavior of the crypto.sha256 and
+// crypto.hmac.sha256 built-ins on encoded values.
+func MaskingHash(v any, key string) (string, error) {
+	bs, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+
+	if key == "" {
+		sum := sha256.Sum256(bs)
+		return hex.EncodeToString(sum[:]), nil
+	}
+
+	mac := hmac.New(sha256.New, []byte(key))
+	if _, err := mac.Write(bs); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(mac.Sum(nil)), nil
+}
+
 func hmacHelper(operands []*ast.Term, iter func(*ast.Term) error, h func() hash.Hash) error {
 	message, err := builtins.StringOperandByteSlice(operands[0].Value, 1)
 	if err != nil {

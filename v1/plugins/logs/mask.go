@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/open-policy-agent/opa/internal/deepcopy"
+	"github.com/open-policy-agent/opa/v1/topdown"
 )
 
 type maskOP string
@@ -20,6 +21,8 @@ type maskOP string
 const (
 	maskOPRemove maskOP = "remove"
 	maskOPUpsert maskOP = "upsert"
+	maskOPHash   maskOP = "hash"
+	maskOPRetain maskOP = "retain"
 
 	partInput    = "input"
 	partResult   = "result"
@@ -32,6 +35,7 @@ type maskRule struct {
 	OP                maskOP `json:"op"`
 	Path              string `json:"path"`
 	Value             any    `json:"value"`
+	Key               string `json:"key"`
 	escapedParts      []string
 	modifyFullObj     bool
 	failUndefinedPath bool
@@ -103,11 +107,18 @@ func newMaskRule(path string, opts ...maskRuleOption) (*maskRule, error) {
 func withOP(op maskOP) maskRuleOption {
 	return func(r *maskRule) error {
 		switch op {
-		case maskOPRemove, maskOPUpsert:
+		case maskOPRemove, maskOPUpsert, maskOPHash, maskOPRetain:
 			r.OP = op
 			return nil
 		}
 		return fmt.Errorf("mask op is not supported: %s", op)
+	}
+}
+
+func withKey(key string) maskRuleOption {
+	return func(r *maskRule) error {
+		r.Key = key
+		return nil
 	}
 }
 
@@ -195,8 +206,101 @@ func (r maskRule) Mask(event *EventV1) error {
 		}
 
 		event.Masked = append(event.Masked, r.String())
+	case maskOPHash:
+		if err := r.hashValue(*maskObj, maskObjPtr, r.Key); err != nil {
+			if err == errMaskInvalidObject && r.failUndefinedPath {
+				return err
+			}
+			return nil
+		}
+
+		event.Masked = append(event.Masked, r.String())
+	case maskOPRetain:
+		// retain is an explicit no-op: the field is logged unchanged. It
+		// exists so policies can express allow-listed fields, e.g. alongside
+		// a secure-by-default classification in the masking policy preview.
 	default:
 		return fmt.Errorf("illegal mask op value: %s", r.OP)
+	}
+
+	return nil
+}
+
+// hashValue replaces the value at the rule's path with a digest computed by
+// topdown.MaskingHash. Paths pointing at undefined data are ignored, matching
+// remove and upsert behavior.
+func (r maskRule) hashValue(root any, rootPtr **any, key string) error {
+	if r.modifyFullObj {
+		digest, err := topdown.MaskingHash(root, key)
+		if err != nil {
+			return err
+		}
+
+		var hashed any = digest
+		*rootPtr = &hashed
+
+		return nil
+	}
+
+	parts := r.escapedParts[1:]
+
+	// Walk to the parent of the target; map and slice elements are reached
+	// through references, so replacing the terminal value in place mutates the
+	// event without rebuilding the path (unlike removal, which shifts slices).
+	node := root
+
+	for _, p := range parts[:len(parts)-1] {
+		switch v := node.(type) {
+		case map[string]any:
+			child, ok := v[p]
+			if !ok {
+				return errMaskInvalidObject
+			}
+			node = child
+
+		case []any:
+			index, err := strconv.Atoi(p)
+			if err != nil || index < 0 || index >= len(v) {
+				return errMaskInvalidObject
+			}
+			node = v[index]
+
+		default:
+			return errMaskInvalidObject
+		}
+	}
+
+	targetKey := parts[len(parts)-1]
+
+	switch v := node.(type) {
+	case map[string]any:
+		val, ok := v[targetKey]
+		if !ok {
+			return errMaskInvalidObject
+		}
+
+		digest, err := topdown.MaskingHash(val, key)
+		if err != nil {
+			return err
+		}
+
+		v[targetKey] = digest
+
+	case []any:
+		index, err := strconv.Atoi(targetKey)
+		if err != nil || index < 0 || index >= len(v) {
+			return errMaskInvalidObject
+		}
+
+		digest, err := topdown.MaskingHash(v[index], key)
+		if err != nil {
+			return err
+		}
+
+		v[index] = digest
+
+	default:
+		return errMaskInvalidObject
 	}
 
 	return nil
@@ -371,8 +475,13 @@ func newMaskRuleSet(rv any, onRuleError func(*maskRule, error)) (*maskRuleSet, e
 
 			rule.Value = v["value"]
 
+			key, keySet := getString(v, "key")
+			if keySet && key == "" {
+				return nil, fmt.Errorf("invalid \"key\" value: %v %[1]T", v["key"])
+			}
+
 			// use unmarshalled values to create new Mask Rule
-			rule, err := newMaskRule(rule.Path, withOP(rule.OP), withValue(rule.Value))
+			rule, err := newMaskRule(rule.Path, withOP(rule.OP), withValue(rule.Value), withKey(key))
 			// TODO add withFailUndefinedPath() option based on
 			//   A) new syntax in user defined mask rule
 			//   B) passed in/global configuration option

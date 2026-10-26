@@ -723,6 +723,25 @@ func (rt *Runtime) manager() *plugins.Manager {
 	return rt.Manager
 }
 
+// PreviewDecisionLogMask evaluates the configured decision log masking
+// policy against opts.Event and reports the action each event field would
+// receive when logged -- retain, hash, or remove -- and the reason each rule
+// matched. It neither evaluates the logged decision nor writes to a decision
+// log sink: the event is not buffered, uploaded, printed, or forwarded to a
+// custom logger plugin. Fields that no rule covers get the secure-by-default
+// action (remove), unless overridden in opts.
+//
+// The preview runs on a single read-only snapshot, so a bundle updating while
+// it is in progress cannot mix policy versions.
+func (rt *Runtime) PreviewDecisionLogMask(ctx context.Context, opts logs.PreviewMaskOptions) (*logs.MaskPreview, error) {
+	plugin := logs.Lookup(rt.manager())
+	if plugin == nil {
+		return nil, errors.New("decision logs plugin is not configured")
+	}
+
+	return plugin.PreviewMask(ctx, opts)
+}
+
 // metricsProvider returns the Prometheus provider currently in effect.
 func (rt *Runtime) metricsProvider() *prometheus.Provider {
 	rt.stateMtx.RLock()

@@ -35,6 +35,7 @@ import (
 	"github.com/open-policy-agent/opa/v1/loader"
 	"github.com/open-policy-agent/opa/v1/plugins"
 	"github.com/open-policy-agent/opa/v1/plugins/discovery"
+	"github.com/open-policy-agent/opa/v1/plugins/logs"
 	"github.com/open-policy-agent/opa/v1/server/authorizer"
 	"github.com/open-policy-agent/opa/v1/storage/disk"
 	"github.com/open-policy-agent/opa/v1/storage/inmem"
@@ -2457,4 +2458,96 @@ func serve(ctx context.Context, t *testing.T, rt *Runtime) {
 		}
 	}()
 	t.Cleanup(func() { <-done })
+}
+
+func TestRuntimePreviewDecisionLogMask(t *testing.T) {
+	ctx := t.Context()
+	dir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("decision_logs:\n  console: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	policyDir := filepath.Join(dir, "policy")
+	if err := os.Mkdir(policyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	policy := `
+		package system.log
+		import rego.v1
+
+		mask contains {"op": "hash", "path": "/input/password", "key": "k"} if {
+			input.input.password
+		}
+	`
+	if err := os.WriteFile(filepath.Join(policyDir, "mask.rego"), []byte(policy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	params := NewParams()
+	params.ConfigFile = filepath.Join(dir, "config.yaml")
+	params.Paths = []string{policyDir}
+	params.Output = io.Discard
+	params.Logger = testLog.New()
+
+	rt, err := NewRuntime(ctx, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var input any = map[string]any{"password": "secret", "name": "bob"}
+
+	preview, err := rt.PreviewDecisionLogMask(ctx, logs.PreviewMaskOptions{
+		Event: &logs.EventV1{Input: &input},
+	})
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+
+	if preview.DefaultAction != logs.DefaultMaskAction {
+		t.Fatalf("expected secure default %q, got %q", logs.DefaultMaskAction, preview.DefaultAction)
+	}
+
+	var password *logs.MaskPathVerdict
+	var name *logs.MaskPathVerdict
+
+	for i := range preview.Paths {
+		switch preview.Paths[i].Path {
+		case "/input/password":
+			password = &preview.Paths[i]
+		case "/input/name":
+			name = &preview.Paths[i]
+		}
+	}
+
+	if password == nil || !password.Matched || password.Action != logs.MaskActionHash {
+		t.Fatalf("expected /input/password matched hash, got %+v", password)
+	}
+
+	if password.Reason == "" {
+		t.Fatal("expected a hit reason for the hash rule")
+	}
+
+	if name == nil || name.Matched || name.Action != logs.MaskActionRemove {
+		t.Fatalf("expected /input/name to default to remove, got %+v", name)
+	}
+
+	if input.(map[string]any)["password"] != "secret" {
+		t.Fatal("sample input mutated by preview")
+	}
+}
+
+func TestRuntimePreviewDecisionLogMaskNotConfigured(t *testing.T) {
+	rt, err := NewRuntime(t.Context(), NewParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var input any = map[string]any{"x": 1}
+	if _, err := rt.PreviewDecisionLogMask(t.Context(), logs.PreviewMaskOptions{
+		Event: &logs.EventV1{Input: &input},
+	}); err == nil {
+		t.Fatal("expected error when decision logs plugin is not configured")
+	}
 }

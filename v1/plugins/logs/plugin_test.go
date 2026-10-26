@@ -2689,6 +2689,80 @@ func TestPluginMasking(t *testing.T) {
 				},
 			},
 		},
+		{
+			note: "simple hash (unkeyed)",
+			rawPolicy: []byte(`
+			package system.log
+			import rego.v1
+			mask contains {"op": "hash", "path": "/input/password"} if {
+				input.input.password
+			}`),
+			expMasked: []string{"/input/password"},
+			input: map[string]any{
+				"name":     "bob",
+				"password": "secret",
+			},
+			expected: map[string]any{
+				"name":     "bob",
+				"password": mustMaskingHash(t, "secret", ""),
+			},
+		},
+		{
+			note: "hash nested field inside an array with a key",
+			rawPolicy: []byte(`
+			package system.log
+			import rego.v1
+			mask contains {"op": "hash", "path": "/input/users/0/ssn", "key": "tenant-key"}`),
+			expMasked: []string{"/input/users/0/ssn"},
+			input: map[string]any{
+				"users": []any{
+					map[string]any{"name": "bob", "ssn": "123-45-6789"},
+				},
+			},
+			expected: map[string]any{
+				"users": []any{
+					map[string]any{"name": "bob", "ssn": mustMaskingHash(t, "123-45-6789", "tenant-key")},
+				},
+			},
+		},
+		{
+			note: "hash whole input",
+			rawPolicy: []byte(`
+			package system.log
+			import rego.v1
+			mask contains {"op": "hash", "path": "/input"}`),
+			expMasked: []string{"/input"},
+			input: map[string]any{
+				"password": "secret",
+			},
+			expected: mustMaskingHash(t, map[string]any{"password": "secret"}, ""),
+		},
+		{
+			note: "hash undefined path is ignored",
+			rawPolicy: []byte(`
+			package system.log
+			import rego.v1
+			mask contains {"op": "hash", "path": "/input/missing/secret"}`),
+			input: map[string]any{
+				"name": "bob",
+			},
+			expected: map[string]any{
+				"name": "bob",
+			},
+		},
+		{
+			note: "explicit retain leaves the field untouched",
+			rawPolicy: []byte(`
+			package system.log
+			import rego.v1
+			mask contains {"op": "retain", "path": "/input/name"}`),
+			input: map[string]any{
+				"name": "bob",
+			},
+			expected: map[string]any{
+				"name": "bob",
+			},
+		},
 	}
 
 	for _, tc := range tests {
