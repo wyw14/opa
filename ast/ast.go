@@ -221,6 +221,8 @@ var AnySuffixMatch = v1.AnySuffixMatch
 
 var Concat = v1.Concat
 
+var LongestCommonPrefix = v1.LongestCommonPrefix
+
 var FormatInt = v1.FormatInt
 
 var IndexOf = v1.IndexOf

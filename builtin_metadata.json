@@ -182,6 +182,7 @@
       "strings.any_prefix_match",
       "strings.any_suffix_match",
       "strings.count",
+      "strings.longest_common_prefix",
       "strings.render_template",
       "strings.replace_n",
       "strings.reverse",
@@ -26131,6 +26132,27 @@
       "description": "count of occurrences, `0` if not found",
       "name": "output",
       "type": "number"
+    },
+    "wasm": false
+  },
+  "strings.longest_common_prefix": {
+    "args": [
+      {
+        "description": "strings whose longest common prefix is returned",
+        "name": "strings",
+        "type": "any\u003carray[string], set[string]\u003e"
+      }
+    ],
+    "available": [
+      "edge"
+    ],
+    "description": "Returns the longest common prefix shared by all of the strings in an array or set.",
+    "implementations": {},
+    "introduced": "edge",
+    "result": {
+      "description": "longest prefix shared by all of `strings`, empty if there is none",
+      "name": "output",
+      "type": "string"
     },
     "wasm": false
   },

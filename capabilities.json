@@ -4116,6 +4116,34 @@
       }
     },
     {
+      "name": "strings.longest_common_prefix",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "dynamic": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "of": {
+                  "type": "string"
+                },
+                "type": "set"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      }
+    },
+    {
       "name": "strings.render_template",
       "decl": {
         "args": [

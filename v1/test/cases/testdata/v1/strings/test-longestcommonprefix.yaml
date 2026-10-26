@@ -1,0 +1,260 @@
+---
+cases:
+  - note: strings/longest_common_prefix/array
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - kube-system
+        - kube-public
+        - kube-node-lease
+    want_result:
+      - x: kube-
+  - note: strings/longest_common_prefix/set
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(strings_set)
+        }
+
+        strings_set contains s if {
+        	s := input.strings[_]
+        }
+    input:
+      strings:
+        - production/web/app
+        - production/web/auth
+        - production/web/gateway
+    want_result:
+      - x: production/web/
+  - note: strings/longest_common_prefix/one_element_is_prefix
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - prod
+        - production
+        - prodigal
+    want_result:
+      - x: prod
+  - note: strings/longest_common_prefix/no_common_prefix
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - kube-system
+        - data
+    want_result:
+      - x: ""
+  - note: strings/longest_common_prefix/empty_array
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings: []
+    want_result:
+      - x: ""
+  - note: strings/longest_common_prefix/empty_set
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(strings_set)
+        }
+
+        strings_set contains s if {
+        	s := input.strings[_]
+        }
+    input:
+      strings: []
+    want_result:
+      - x: ""
+  - note: strings/longest_common_prefix/single_element
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - namespace/app
+    want_result:
+      - x: namespace/app
+  - note: strings/longest_common_prefix/empty_string_element
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - namespace/app
+        - ""
+        - namespace/web
+    want_result:
+      - x: ""
+  - note: strings/longest_common_prefix/order_and_duplicates
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - prod/web/auth
+        - prod/web/app
+        - prod/web/app
+        - prod/web/gateway
+    want_result:
+      - x: prod/web/
+  - note: strings/longest_common_prefix/unicode_code_points
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - "名前/abc"
+        - "名前/def"
+    want_result:
+      - x: "名前/"
+  - note: strings/longest_common_prefix/unicode_boundary
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - "étang"
+        - "ètang"
+    want_result:
+      - x: ""
+  - note: strings/longest_common_prefix/literal_set
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix({"srv/api", "srv/web"})
+        }
+    want_result:
+      - x: "srv/"
+  - note: strings/longest_common_prefix/type_error_nostrict
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - a/app
+        - 1
+    want_result: []
+  - note: strings/longest_common_prefix/type_error_nostrict_outer
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings: 1
+    want_result: []
+  - note: strings/longest_common_prefix/type_error_strict_element
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings:
+        - a/app
+        - 1
+    want_error: "test-0.rego:4: eval_type_error: strings.longest_common_prefix: operand 1 must be array of strings but got array containing number"
+    strict_error: true
+  - note: strings/longest_common_prefix/type_error_strict_set_element
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(strings_set)
+        }
+
+        strings_set contains s if {
+        	s := input.strings[_]
+        }
+    input:
+      strings:
+        - a/app
+        - true
+    want_error: "test-0.rego:4: eval_type_error: strings.longest_common_prefix: operand 1 must be set of strings but got set containing boolean"
+    strict_error: true
+  - note: strings/longest_common_prefix/type_error_strict_outer
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := result if {
+        	result := strings.longest_common_prefix(input.strings)
+        }
+    input:
+      strings: 1
+    want_error: "test-0.rego:4: eval_type_error: strings.longest_common_prefix: operand 1 must be one of {set, array} but got number"
+    strict_error: true

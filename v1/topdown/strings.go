@@ -389,6 +389,86 @@ func builtinConcat(bctx BuiltinContext, operands []*ast.Term, iter func(*ast.Ter
 	return builtins.NewOperandTypeErr(2, operands[1].Value, "set", "array")
 }
 
+func builtinLongestCommonPrefix(_ BuiltinContext, operands []*ast.Term, iter func(*ast.Term) error) error {
+	col := operands[0].Value
+
+	// fast path for empty or single string array/set, allocates no memory
+	if term, ok := zeroOrOneStringTerm(col); ok {
+		return iter(term)
+	}
+
+	// Every element is validated before the prefix is computed, so that a
+	// non-string element is always the type error it is declared to be,
+	// even after an empty string that would have made the result empty.
+	var strs []string
+	switch c := col.(type) {
+	case *ast.Array:
+		strs = make([]string, 0, c.Len())
+		for i := range c.Len() {
+			s, ok := c.Elem(i).Value.(ast.String)
+			if !ok {
+				return builtins.NewOperandElementErr(1, c, c.Elem(i).Value, "string")
+			}
+			strs = append(strs, string(s))
+		}
+	case ast.Set:
+		strs = make([]string, 0, c.Len())
+		for _, t := range c.Slice() {
+			s, ok := t.Value.(ast.String)
+			if !ok {
+				return builtins.NewOperandElementErr(1, c, t.Value, "string")
+			}
+			strs = append(strs, string(s))
+		}
+	default:
+		return builtins.NewOperandTypeErr(1, col, "set", "array")
+	}
+
+	return iter(ast.InternedTerm(longestCommonPrefix(strs)))
+}
+
+// longestCommonPrefix returns the prefix shared by every string in strs.
+// Strings are compared by Unicode code point, and the result is cut only on a
+// complete code point boundary: strings whose first bytes coincide inside a
+// multi-byte rune (e.g. "é" and "è", both starting with 0xC3) share no prefix.
+// The result is empty for an empty element or differing first code points,
+// and does not depend on the order of strs.
+func longestCommonPrefix(strs []string) string {
+	prefix := strs[0]
+	for _, s := range strs[1:] {
+		if isASCII(prefix) && isASCII(s) {
+			prefix = commonASCIIPrefix(prefix, s)
+		} else {
+			prefix = commonRunePrefix(prefix, s)
+		}
+		if prefix == "" {
+			return ""
+		}
+	}
+	return prefix
+}
+
+func commonASCIIPrefix(a, b string) string {
+	i := 0
+	for i < len(a) && i < len(b) && a[i] == b[i] {
+		i++
+	}
+	return a[:i]
+}
+
+func commonRunePrefix(a, b string) string {
+	off := 0
+	for off < len(a) && off < len(b) {
+		ra, na := utf8.DecodeRuneInString(a[off:])
+		rb, nb := utf8.DecodeRuneInString(b[off:])
+		if ra != rb || na != nb {
+			break
+		}
+		off += na
+	}
+	return a[:off]
+}
+
 func zeroOrOneStringTerm(a ast.Value) (*ast.Term, bool) {
 	switch b := a.(type) {
 	case *ast.Array:
@@ -1016,6 +1096,7 @@ func init() {
 
 	RegisterBuiltinFunc(ast.FormatInt.Name, builtinFormatInt)
 	RegisterBuiltinFunc(ast.Concat.Name, builtinConcat)
+	RegisterBuiltinFunc(ast.LongestCommonPrefix.Name, builtinLongestCommonPrefix)
 	RegisterBuiltinFunc(ast.IndexOf.Name, builtinIndexOf)
 	RegisterBuiltinFunc(ast.IndexOfN.Name, builtinIndexOfN)
 	RegisterBuiltinFunc(ast.Substring.Name, builtinSubstring)

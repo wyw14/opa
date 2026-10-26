@@ -1,0 +1,231 @@
+---
+cases:
+  - input:
+      strings: ["kube-system", "kube-public", "kube-node-lease"]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/array
+    query: data.test.p = x
+    want_result:
+      - x: kube-
+  - input:
+      strings: ["production/web/app", "production/web/auth", "production/web/gateway"]
+    modules:
+      - |
+        package test
+
+        strings_set[s] {
+          s := input.strings[_]
+        }
+
+        p = result {
+          strings.longest_common_prefix(strings_set, result)
+        }
+    note: strings/longest_common_prefix/set
+    query: data.test.p = x
+    want_result:
+      - x: production/web/
+  - input:
+      strings: ["prod", "production", "prodigal"]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/one_element_is_prefix
+    query: data.test.p = x
+    want_result:
+      - x: prod
+  - input:
+      strings: ["kube-system", "data"]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/no_common_prefix
+    query: data.test.p = x
+    want_result:
+      - x: ""
+  - input:
+      strings: []
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/empty_array
+    query: data.test.p = x
+    want_result:
+      - x: ""
+  - input:
+      strings: []
+    modules:
+      - |
+        package test
+
+        strings_set[s] {
+          s := input.strings[_]
+        }
+
+        p = result {
+          strings.longest_common_prefix(strings_set, result)
+        }
+    note: strings/longest_common_prefix/empty_set
+    query: data.test.p = x
+    want_result:
+      - x: ""
+  - input:
+      strings: ["namespace/app"]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/single_element
+    query: data.test.p = x
+    want_result:
+      - x: namespace/app
+  - input:
+      strings: ["namespace/app", "", "namespace/web"]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/empty_string_element
+    query: data.test.p = x
+    want_result:
+      - x: ""
+  - input:
+      strings: ["prod/web/auth", "prod/web/app", "prod/web/app", "prod/web/gateway"]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/order_and_duplicates
+    query: data.test.p = x
+    want_result:
+      - x: prod/web/
+  - input:
+      strings: ["名前/abc", "名前/def"]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/unicode_code_points
+    query: data.test.p = x
+    want_result:
+      - x: "名前/"
+  - input:
+      strings: ["étang", "ètang"]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/unicode_boundary
+    query: data.test.p = x
+    want_result:
+      - x: ""
+  - modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix({"srv/api", "srv/web"}, result)
+        }
+    note: strings/longest_common_prefix/literal_set
+    query: data.test.p = x
+    want_result:
+      - x: "srv/"
+  - input:
+      strings: ["a/app", 1]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/type_error_nostrict
+    query: data.test.p = x
+    want_result: []
+  - input:
+      strings: 1
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/type_error_nostrict_outer
+    query: data.test.p = x
+    want_result: []
+  - input:
+      strings: ["a/app", 1]
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/type_error_strict_element
+    query: data.test.p = x
+    strict_error: true
+    want_error: "test-0.rego:4: eval_type_error: strings.longest_common_prefix: operand 1 must be array of strings but got array containing number"
+  - input:
+      strings: ["a/app", true]
+    modules:
+      - |
+        package test
+
+        strings_set[s] {
+          s := input.strings[_]
+        }
+
+        p = result {
+          strings.longest_common_prefix(strings_set, result)
+        }
+    note: strings/longest_common_prefix/type_error_strict_set_element
+    query: data.test.p = x
+    strict_error: true
+    want_error: "test-0.rego:8: eval_type_error: strings.longest_common_prefix: operand 1 must be set of strings but got set containing boolean"
+  - input:
+      strings: 1
+    modules:
+      - |
+        package test
+
+        p = result {
+          strings.longest_common_prefix(input.strings, result)
+        }
+    note: strings/longest_common_prefix/type_error_strict_outer
+    query: data.test.p = x
+    strict_error: true
+    want_error: "test-0.rego:4: eval_type_error: strings.longest_common_prefix: operand 1 must be one of {set, array} but got number"

@@ -1010,6 +1010,43 @@ func TestCheckBuiltinErrors(t *testing.T) {
 	}
 }
 
+func TestCheckLongestCommonPrefix(t *testing.T) {
+	env := newTypeChecker().Env(BuiltinMap)
+
+	tests := []struct {
+		note  string
+		query string
+		err   bool
+	}{
+		{"array", `strings.longest_common_prefix(["a", "ab"], x)`, false},
+		{"set", `strings.longest_common_prefix({"a", "ab"}, x)`, false},
+		{"empty array", `strings.longest_common_prefix([], x)`, false},
+		{"array with non-string element", `strings.longest_common_prefix([1], x)`, true},
+		{"set with non-string element", `strings.longest_common_prefix({1}, x)`, true},
+		{"unsupported outer type", `strings.longest_common_prefix(1, x)`, true},
+		{"too many args", `strings.longest_common_prefix([], [], x)`, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.note, func(t *testing.T) {
+			body := MustParseBody(tc.query)
+			tpe, errs := newTypeChecker().CheckBody(env, body)
+			if tc.err {
+				if len(errs) != 1 {
+					t.Fatalf("expected exactly one error but got:\n%v", errs)
+				}
+				return
+			}
+			if len(errs) != 0 {
+				t.Fatalf("unexpected errors:\n%v", errs)
+			}
+			if tpe.Get(Var("x")) != types.S {
+				t.Fatalf("expected x to be %v but got %v", types.S, tpe.Get(Var("x")))
+			}
+		})
+	}
+}
+
 func TestVoidBuiltins(t *testing.T) {
 	builtinMap := make(map[string]*Builtin, len(BuiltinMap)+1)
 	maps.Copy(builtinMap, BuiltinMap)

@@ -131,6 +131,7 @@ var DefaultBuiltins = [...]*Builtin{
 	AnyPrefixMatch,
 	AnySuffixMatch,
 	Concat,
+	LongestCommonPrefix,
 	FormatInt,
 	IndexOf,
 	IndexOfN,
@@ -1130,6 +1131,22 @@ var Concat = &Builtin{
 	),
 	Categories:  stringsCat,
 	CanSkipBctx: false,
+}
+
+var LongestCommonPrefix = &Builtin{
+	Name:        "strings.longest_common_prefix",
+	Description: "Returns the longest common prefix shared by all of the strings in an array or set.",
+	Decl: types.NewFunction(
+		types.Args(
+			types.Named("strings", types.NewAny(
+				types.SetOfStr,
+				types.NewArray(nil, types.S),
+			)).Description("strings whose longest common prefix is returned"),
+		),
+		types.Named("output", types.S).Description("longest prefix shared by all of `strings`, empty if there is none"),
+	),
+	Categories:  stringsCat,
+	CanSkipBctx: true,
 }
 
 var FormatInt = &Builtin{

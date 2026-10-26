@@ -123,6 +123,180 @@ func TestBuiltinSprintf(t *testing.T) {
 	}
 }
 
+func TestBuiltinLongestCommonPrefix(t *testing.T) {
+	tests := []struct {
+		note string
+		col  ast.Value
+		exp  string
+	}{
+		{note: "empty array", col: ast.NewArray(), exp: ""},
+		{note: "empty set", col: ast.NewSet(), exp: ""},
+		{note: "single array element", col: ast.NewArray(ast.StringTerm("foo")), exp: "foo"},
+		{note: "single set element", col: ast.NewSet(ast.StringTerm("foo")), exp: "foo"},
+		{note: "single empty string", col: ast.NewArray(ast.StringTerm("")), exp: ""},
+		{note: "common prefix", col: ast.NewArray(
+			ast.StringTerm("foo/bar"), ast.StringTerm("foo/baz"), ast.StringTerm("foo/qux")), exp: "foo/"},
+		{note: "one element is the full prefix", col: ast.NewArray(
+			ast.StringTerm("foo"), ast.StringTerm("foobar"), ast.StringTerm("foobaz")), exp: "foo"},
+		{note: "identical strings", col: ast.NewArray(
+			ast.StringTerm("foo"), ast.StringTerm("foo"), ast.StringTerm("foo")), exp: "foo"},
+		{note: "duplicates", col: ast.NewArray(
+			ast.StringTerm("foo"), ast.StringTerm("foobar"), ast.StringTerm("foo")), exp: "foo"},
+		{note: "no common first codepoint", col: ast.NewArray(
+			ast.StringTerm("abc"), ast.StringTerm("def")), exp: ""},
+		{note: "empty string element", col: ast.NewArray(
+			ast.StringTerm("foo"), ast.StringTerm(""), ast.StringTerm("foobar")), exp: ""},
+		{note: "empty string element first", col: ast.NewArray(
+			ast.StringTerm(""), ast.StringTerm("foo")), exp: ""},
+		{note: "ascii strings, no common prefix", col: ast.NewArray(
+			ast.StringTerm("kube-system"), ast.StringTerm("data")), exp: ""},
+		{note: "set", col: ast.NewSet(
+			ast.StringTerm("kube-system"), ast.StringTerm("kube-public"), ast.StringTerm("kube-node-lease")), exp: "kube-"},
+		{note: "shared multi-byte runes", col: ast.NewArray(
+			ast.StringTerm("名前/abc"), ast.StringTerm("名前/def")), exp: "名前/"},
+		{
+			note: "first bytes shared inside a multi-byte rune",
+			// "é" is U+00E9 (0xC3 0xA9), "è" is U+00E8 (0xC3 0xA8): a byte-wise
+			// comparison would return the invalid 0xC3 byte, the code point
+			// comparison returns nothing.
+			col: ast.NewArray(ast.StringTerm("étang"), ast.StringTerm("ètang")),
+			exp: "",
+		},
+		{
+			note: "result cut on a complete code point boundary",
+			col:  ast.NewArray(ast.StringTerm("a€b"), ast.StringTerm("a€c")),
+			exp:  "a€",
+		},
+		{
+			note: "multi-byte rune shared, ascii remainder differs",
+			col:  ast.NewSet(ast.StringTerm("€x"), ast.StringTerm("€y")),
+			exp:  "€",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.note, func(t *testing.T) {
+			var got string
+			err := builtinLongestCommonPrefix(BuiltinContext{}, []*ast.Term{ast.NewTerm(tc.col)}, func(r *ast.Term) error {
+				got = string(r.Value.(ast.String))
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.exp {
+				t.Errorf("expected %q, got %q", tc.exp, got)
+			}
+		})
+	}
+}
+
+func TestBuiltinLongestCommonPrefixErrors(t *testing.T) {
+	tests := []struct {
+		note string
+		col  ast.Value
+		exp  string
+	}{
+		{
+			note: "non-string array element",
+			col:  ast.NewArray(ast.StringTerm("foo"), ast.IntNumberTerm(1)),
+			exp:  "operand 1 must be array of strings but got array containing number",
+		},
+		{
+			note: "non-string array element first",
+			col:  ast.NewArray(ast.IntNumberTerm(1), ast.StringTerm("foo")),
+			exp:  "operand 1 must be array of strings but got array containing number",
+		},
+		{
+			note: "non-string set element",
+			col:  ast.NewSet(ast.StringTerm("foo"), ast.BooleanTerm(true)),
+			exp:  "operand 1 must be set of strings but got set containing boolean",
+		},
+		{
+			note: "single non-string element",
+			col:  ast.NewArray(ast.IntNumberTerm(1)),
+			exp:  "operand 1 must be array of strings but got array containing number",
+		},
+		{
+			note: "unsupported scalar type",
+			col:  ast.IntNumberTerm(1).Value,
+			exp:  "operand 1 must be one of {set, array} but got number",
+		},
+		{
+			note: "unsupported object type",
+			col:  ast.NewObject([2]*ast.Term{ast.StringTerm("a"), ast.StringTerm("b")}),
+			exp:  "operand 1 must be one of {set, array} but got object",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.note, func(t *testing.T) {
+			err := builtinLongestCommonPrefix(BuiltinContext{}, []*ast.Term{ast.NewTerm(tc.col)}, func(*ast.Term) error {
+				t.Fatal("unexpected result")
+				return nil
+			})
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.exp) {
+				t.Fatalf("expected error containing %q, got %q", tc.exp, err.Error())
+			}
+		})
+	}
+}
+
+func TestLongestCommonPrefixOrderIndependence(t *testing.T) {
+	// The result must not depend on element order or duplicates, and must
+	// agree with a naive rune-by-rune implementation.
+	rng := rand.New(rand.NewPCG(5, 6))
+	runes := []rune("abc/名前€éè")
+
+	for range 1000 {
+		strs := make([]string, rng.IntN(8)+1)
+		for i := range strs {
+			b := make([]rune, rng.IntN(6)+1)
+			for j := range b {
+				b[j] = runes[rng.IntN(len(runes))]
+			}
+			strs[i] = string(b)
+		}
+
+		want := naiveLongestCommonPrefix(strs)
+
+		if got := longestCommonPrefix(strs); got != want {
+			t.Fatalf("longestCommonPrefix(%q) = %q, want %q", strs, got, want)
+		}
+
+		shuffled := slices.Clone(strs)
+		rng.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
+		if got := longestCommonPrefix(shuffled); got != want {
+			t.Fatalf("order changed result: %q -> %q, want %q", shuffled, got, want)
+		}
+
+		if len(strs) > 1 {
+			dup := append(slices.Clone(strs), strs[0])
+			if got := longestCommonPrefix(dup); got != want {
+				t.Fatalf("duplicate changed result: %q -> %q, want %q", dup, got, want)
+			}
+		}
+	}
+}
+
+func naiveLongestCommonPrefix(strs []string) string {
+	prefix := []rune(strs[0])
+	for _, s := range strs[1:] {
+		r := []rune(s)
+		n := min(len(prefix), len(r))
+		i := 0
+		for i < n && prefix[i] == r[i] {
+			i++
+		}
+		prefix = prefix[:i]
+		if len(prefix) == 0 {
+			return ""
+		}
+	}
+	return string(prefix)
+}
+
 func TestBuiltinAnyPrefixMatch(t *testing.T) {
 	tests := []struct {
 		note     string
