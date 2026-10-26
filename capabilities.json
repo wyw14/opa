@@ -1026,6 +1026,78 @@
       }
     },
     {
+      "name": "geohash.decode",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "static": [
+            {
+              "key": "east",
+              "value": {
+                "type": "number"
+              }
+            },
+            {
+              "key": "lat",
+              "value": {
+                "type": "number"
+              }
+            },
+            {
+              "key": "lon",
+              "value": {
+                "type": "number"
+              }
+            },
+            {
+              "key": "north",
+              "value": {
+                "type": "number"
+              }
+            },
+            {
+              "key": "south",
+              "value": {
+                "type": "number"
+              }
+            },
+            {
+              "key": "west",
+              "value": {
+                "type": "number"
+              }
+            }
+          ],
+          "type": "object"
+        },
+        "type": "function"
+      }
+    },
+    {
+      "name": "geohash.encode",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      }
+    },
+    {
       "name": "glob.match",
       "decl": {
         "args": [

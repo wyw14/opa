@@ -71,6 +71,10 @@
       "yaml.marshal",
       "yaml.unmarshal"
     ],
+    "geohash": [
+      "geohash.decode",
+      "geohash.encode"
+    ],
     "glob": [
       "glob.match",
       "glob.quote_meta"
@@ -8477,6 +8481,58 @@
       "type": "string"
     },
     "wasm": true
+  },
+  "geohash.decode": {
+    "args": [
+      {
+        "description": "a non-empty geohash string using the characters `0123456789bcdefghjkmnpqrstuvwxyz`",
+        "name": "hash",
+        "type": "string"
+      }
+    ],
+    "available": [
+      "edge"
+    ],
+    "description": "Decodes a geohash string to the center point and latitude/longitude bounds of the grid cell it denotes.",
+    "implementations": {},
+    "introduced": "edge",
+    "result": {
+      "description": "the grid cell center (`lat`, `lon`) and its bounds (`north`, `east`, `south`, `west`)",
+      "name": "result",
+      "type": "object\u003ceast: number, lat: number, lon: number, north: number, south: number, west: number\u003e"
+    },
+    "wasm": false
+  },
+  "geohash.encode": {
+    "args": [
+      {
+        "description": "latitude in degrees, between -90 and 90 (inclusive)",
+        "name": "lat",
+        "type": "number"
+      },
+      {
+        "description": "longitude in degrees, between -180 (inclusive) and 180 (exclusive)",
+        "name": "lon",
+        "type": "number"
+      },
+      {
+        "description": "length of the resulting geohash, an integer between 1 and 12",
+        "name": "precision",
+        "type": "number"
+      }
+    ],
+    "available": [
+      "edge"
+    ],
+    "description": "Encodes a latitude/longitude coordinate to a geohash string of the given precision (the number of characters, between 1 and 12).",
+    "implementations": {},
+    "introduced": "edge",
+    "result": {
+      "description": "geohash string of length `precision`",
+      "name": "hash",
+      "type": "string"
+    },
+    "wasm": false
   },
   "glob.match": {
     "args": [

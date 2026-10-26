@@ -366,6 +366,14 @@ var HexEncode = v1.HexEncode
 var HexDecode = v1.HexDecode
 
 /**
+ * GeoHash
+ */
+
+var GeoHashEncode = v1.GeoHashEncode
+
+var GeoHashDecode = v1.GeoHashDecode
+
+/**
  * Tokens
  */
 

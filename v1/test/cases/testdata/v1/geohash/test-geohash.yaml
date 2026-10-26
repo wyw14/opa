@@ -1,0 +1,154 @@
+---
+cases:
+  - note: geohash/encode
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := x if {
+        	geohash.encode(37.8324, 112.5584, 9, x)
+        }
+    want_result:
+      - x: ww8p1r4t8
+  - note: geohash/encode midpoint assigned to upper half
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := x if {
+        	geohash.encode(0, 0, 6, x)
+        }
+    want_result:
+      - x: s00000
+  - note: geohash/encode south-western corner
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := x if {
+        	geohash.encode(-90, -180, 12, x)
+        }
+    want_result:
+      - x: "000000000000"
+  - note: geohash/decode
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := geohash.decode("ezs42")
+    want_result:
+      - x:
+          east: -5.5810546875
+          lat: 42.60498046875
+          lon: -5.60302734375
+          north: 42.626953125
+          south: 42.5830078125
+          west: -5.625
+  - note: geohash/decode center re-encodes to original hash
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := x if {
+        	d := geohash.decode("ezs42")
+        	geohash.encode(d.lat, d.lon, 5, x)
+        }
+    want_result:
+      - x: ezs42
+  - note: geohash/encode invalid coordinate is undefined
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := x if {
+        	geohash.encode(200, 0, 6, x)
+        }
+    want_result: []
+  - note: geohash/decode invalid hash is undefined
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p := x if {
+        	geohash.decode("a", x)
+        }
+    want_result: []
+  - note: geohash/encode latitude out of range
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p if {
+        	geohash.encode(91, 0, 6)
+        }
+    want_error_code: eval_type_error
+    want_error: "geohash.encode: operand 1 latitude must be between -90 and 90 but got 91"
+    strict_error: true
+  - note: geohash/encode longitude 180 excluded
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p if {
+        	geohash.encode(0, 180, 6)
+        }
+    want_error_code: eval_type_error
+    want_error: "geohash.encode: operand 2 longitude must be greater than or equal to -180 and less than 180 but got 180"
+    strict_error: true
+  - note: geohash/encode precision out of range
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p if {
+        	geohash.encode(0, 0, 13)
+        }
+    want_error_code: eval_type_error
+    want_error: "geohash.encode: operand 3 geohash precision must be an integer between 1 and 12 but got 13"
+    strict_error: true
+  - note: geohash/encode non-integer precision
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p if {
+        	geohash.encode(0, 0, 1.5)
+        }
+    want_error_code: eval_type_error
+    want_error: "geohash.encode: operand 3 must be integer number but got floating-point number"
+    strict_error: true
+  - note: geohash/decode empty string
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p if {
+        	geohash.decode("")
+        }
+    want_error_code: eval_type_error
+    want_error: "geohash.decode: operand 1 geohash must be a non-empty string"
+    strict_error: true
+  - note: geohash/decode invalid character
+    query: data.test.p = x
+    modules:
+      - |
+        package test
+
+        p if {
+        	geohash.decode("ezsa2")
+        }
+    want_error_code: eval_type_error
+    want_error: "geohash.decode: operand 1 geohash contains invalid character \"a\""
+    strict_error: true

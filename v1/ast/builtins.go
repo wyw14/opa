@@ -184,6 +184,10 @@ var DefaultBuiltins = [...]*Builtin{
 	HexEncode,
 	HexDecode,
 
+	// GeoHash
+	GeoHashEncode,
+	GeoHashDecode,
+
 	// Object Manipulation
 	ObjectUnion,
 	ObjectUnionN,
@@ -2172,6 +2176,50 @@ var HexDecode = &Builtin{
 		types.Named("y", types.S).Description("deserialized from `x`"),
 	),
 	Categories:  catEncoding,
+	CanSkipBctx: true,
+}
+
+/**
+ * GeoHash
+ */
+var geoHashCat = category("geohash")
+
+var GeoHashEncode = &Builtin{
+	Name: "geohash.encode",
+	Description: "Encodes a latitude/longitude coordinate to a geohash string of the given precision " +
+		"(the number of characters, between 1 and 12).",
+	Decl: types.NewFunction(
+		types.Args(
+			types.Named("lat", types.N).Description("latitude in degrees, between -90 and 90 (inclusive)"),
+			types.Named("lon", types.N).Description("longitude in degrees, between -180 (inclusive) and 180 (exclusive)"),
+			types.Named("precision", types.N).Description("length of the resulting geohash, an integer between 1 and 12"),
+		),
+		types.Named("hash", types.S).Description("geohash string of length `precision`"),
+	),
+	Categories:  geoHashCat,
+	CanSkipBctx: true,
+}
+
+var GeoHashDecode = &Builtin{
+	Name:        "geohash.decode",
+	Description: "Decodes a geohash string to the center point and latitude/longitude bounds of the grid cell it denotes.",
+	Decl: types.NewFunction(
+		types.Args(
+			types.Named("hash", types.S).Description("a non-empty geohash string using the characters `0123456789bcdefghjkmnpqrstuvwxyz`"),
+		),
+		types.Named("result", types.NewObject(
+			[]*types.StaticProperty{
+				types.NewStaticProperty("lat", types.N),
+				types.NewStaticProperty("lon", types.N),
+				types.NewStaticProperty("north", types.N),
+				types.NewStaticProperty("east", types.N),
+				types.NewStaticProperty("south", types.N),
+				types.NewStaticProperty("west", types.N),
+			},
+			nil,
+		)).Description("the grid cell center (`lat`, `lon`) and its bounds (`north`, `east`, `south`, `west`)"),
+	),
+	Categories:  geoHashCat,
 	CanSkipBctx: true,
 }
 
