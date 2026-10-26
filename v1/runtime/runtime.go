@@ -1148,6 +1148,14 @@ func (rt *Runtime) DiagnosticAddrs() []string {
 	return rt.server.DiagnosticAddrs()
 }
 
+// NewBundleActivation returns a bundle activation coordinator wired to the
+// runtime's store and parser options. It provides bundle status reporting,
+// dry-run validation and transactional activation on top of the running OPA
+// instance.
+func (rt *Runtime) NewBundleActivation() *bundle.Activation {
+	return bundle.NewActivation(rt.Store).WithParserOptions(rt.Manager.ParserOptions())
+}
+
 // StartREPL starts the runtime in REPL mode. This function will block the calling goroutine.
 func (rt *Runtime) StartREPL(ctx context.Context) error {
 	if err := rt.Manager.Start(ctx); err != nil {

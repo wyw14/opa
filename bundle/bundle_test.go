@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/open-policy-agent/opa/internal/file/archive"
+	"github.com/open-policy-agent/opa/storage"
+	"github.com/open-policy-agent/opa/storage/inmem"
 )
 
 func TestRead_DefaultRegoVersion(t *testing.T) {
@@ -80,5 +82,57 @@ p contains x if {
 				}
 			}
 		})
+	}
+}
+
+func TestActivationWrapper(t *testing.T) {
+	ctx := t.Context()
+
+	files := [][2]string{
+		{"/.manifest", `{"roots":["roles"],"revision":"r1"}`},
+		{"/roles.rego", "package roles\n\nallow = true\n"},
+		{"/roles/data.json", `{"permits":["read"]}`},
+	}
+
+	b, err := NewCustomReader(NewTarballLoader(archive.MustWriteTarGz(files))).Read()
+	if err != nil {
+		t.Fatalf("read bundle: %v", err)
+	}
+
+	store := inmem.New()
+	act := NewActivation(store) // defaults to the package's default (v0) Rego version
+
+	report, err := act.DryRun(ctx, &ActivationOpts{Name: "test", Bundle: &b})
+	if err != nil {
+		t.Fatalf("dry-run: %v", err)
+	}
+	if !report.Activated || report.Skipped || len(report.Diagnostics) != 0 {
+		t.Fatalf("unexpected dry-run report: %+v", report)
+	}
+
+	// The dry-run must not have written to the active store.
+	txn := storage.NewTransactionOrDie(ctx, store)
+	if values, err := store.Read(ctx, txn, storage.MustParsePath("/roles")); !storage.IsNotFound(err) {
+		t.Fatalf("dry-run wrote to the active store: %v (err: %v)", values, err)
+	}
+	store.Abort(ctx, txn)
+
+	if report, err = act.Activate(ctx, &ActivationOpts{Name: "test", Bundle: &b}); err != nil {
+		t.Fatalf("activate: %v", err)
+	} else if !report.Activated || report.Revision != "r1" {
+		t.Fatalf("unexpected activation report: %+v", report)
+	}
+
+	status, err := act.Status(ctx, "test")
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if !status.Active || status.Revision != "r1" {
+		t.Fatalf("unexpected status: %+v", status)
+	}
+
+	// Activating the same revision again is a no-op.
+	if report, err := act.Activate(ctx, &ActivationOpts{Name: "test", Bundle: &b}); err != nil || !report.Skipped {
+		t.Fatalf("expected duplicate revision skip, got %+v, %v", report, err)
 	}
 }

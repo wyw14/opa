@@ -355,6 +355,58 @@ func Deactivate(opts *DeactivateOpts) error {
 	return v1.Deactivate(setDeactivateDefaultRegoVersion(opts))
 }
 
+// ActivationStage identifies the stage of bundle activation that a
+// FileDiagnostic was produced by.
+type ActivationStage = v1.ActivationStage
+
+// Bundle activation stages reported in FileDiagnostic.Stage.
+const (
+	StageSignature = v1.StageSignature
+	StageCompile   = v1.StageCompile
+	StageData      = v1.StageData
+	StageRoots     = v1.StageRoots
+	StageManifest  = v1.StageManifest
+)
+
+// FileDiagnostic is a per-file finding collected while dry-running or
+// activating a bundle.
+type FileDiagnostic = v1.FileDiagnostic
+
+// SignatureResult reports the outcome of bundle signature verification.
+type SignatureResult = v1.SignatureResult
+
+// ModuleResult reports the parse and compilation outcome of one module.
+type ModuleResult = v1.ModuleResult
+
+// DataMigrationResult reports the outcome of migrating bundle data into the
+// store.
+type DataMigrationResult = v1.DataMigrationResult
+
+// ActivationReport is the structured result of an Activation DryRun or
+// Activate call, reporting the bundle revision, signature verification,
+// per-module compilation and data migration results.
+type ActivationReport = v1.ActivationReport
+
+// ActivationOpts are the options for Activation.DryRun and
+// Activation.Activate.
+type ActivationOpts = v1.ActivationOpts
+
+// Status is the activation status of a single bundle.
+type Status = v1.Status
+
+// Activation coordinates bundle activation against a single store, providing
+// status reporting, dry-run validation that never writes to the active store,
+// and serialized, transactional activation that preserves the previously
+// active revision on failure.
+type Activation = v1.Activation
+
+// NewActivation returns a new Activation coordinator for store. Module parsing
+// defaults to the package's default Rego version when the bundle does not
+// specify one.
+func NewActivation(store storage.Store) *Activation {
+	return v1.NewActivation(store).WithParserOptions(ast.ParserOptions{RegoVersion: ast.DefaultRegoVersion})
+}
+
 // LegacyWriteManifestToStore will write the bundle manifest to the older single (unnamed) bundle manifest location.
 //
 // Deprecated: Use WriteManifestToStore and named bundles instead.
